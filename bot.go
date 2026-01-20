@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/sirupsen/logrus"
 )
@@ -69,7 +68,7 @@ func (b *Bot) GetChatAdmins(chatID string) ([]ChatMember, error) {
 	return b.client.GetChatAdmins(chatID)
 }
 
-// GetChatMem returns chat members list with fields:
+// GetChatMembers returns chat members list with fields:
 // userID, creator flag, admin flag
 func (b *Bot) GetChatMembers(chatID string) ([]ChatMember, error) {
 	return b.client.GetChatMembers(chatID)
@@ -187,7 +186,7 @@ func (b *Bot) NewDeeplinkMessage(chatID, text string, keyboard Keyboard, deeplin
 }
 
 // NewFileMessage returns new file message
-func (b *Bot) NewFileMessage(chatID string, file *os.File) *Message {
+func (b *Bot) NewFileMessage(chatID string, file UploadFile) *Message {
 	return &Message{
 		client:      b.client,
 		Chat:        Chat{ID: chatID},
@@ -207,7 +206,7 @@ func (b *Bot) NewFileMessageByFileID(chatID, fileID string) *Message {
 }
 
 // NewVoiceMessage returns new voice message
-func (b *Bot) NewVoiceMessage(chatID string, file *os.File) *Message {
+func (b *Bot) NewVoiceMessage(chatID string, file UploadFile) *Message {
 	return &Message{
 		client:      b.client,
 		Chat:        Chat{ID: chatID},

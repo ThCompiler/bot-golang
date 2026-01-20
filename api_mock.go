@@ -2,7 +2,10 @@ package botgolang
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"testing"
 
 	"github.com/sirupsen/logrus"
 )
@@ -16,6 +19,21 @@ func (h *MockHandler) SendMessage(w http.ResponseWriter) {
 	encoder := json.NewEncoder(w)
 	err := encoder.Encode(&Response{
 		OK: true,
+	})
+
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"err": err,
+		}).Error("cannot encode json")
+	}
+}
+
+func (h *MockHandler) sendErrorResponse(w http.ResponseWriter, description string) {
+	w.Header().Set("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	err := encoder.Encode(&Response{
+		OK:          false,
+		Description: description,
 	})
 
 	if err != nil {
@@ -221,32 +239,32 @@ func (h *MockHandler) GetEvents(w http.ResponseWriter) {
 				  "lastName": "SurName"
 				}
 			  }
-        },
-        {
-            "eventId": 8,
-            "payload": {
-                "callbackData": "echo",
-                "from": {
-				  "firstName": "Name",
-				  "userId": "1234567890"
-                },
-				"message": {
-          			"chat": {
-            			"chatId": "1234567890",
-            			"type": "private"
-          			},
-          			"from": {
-            			"firstName": "bot_name",
-            			"nick": "bot_nick",
-            			"userId": "bot_id"
-          			},
-					"msgId": "6720509406122810000",
-          			"text": "Some important information!",
-					"timestamp": 1564740530
-        		},
-                "queryId": "SVR:123456"
-            },
-            "type": "callbackQuery"
+	        },
+	        {
+	            "eventId": 8,
+	            "payload": {
+	                "callbackData": "echo",
+	                "from": {
+					  "firstName": "Name",
+					  "userId": "1234567890"
+	                },
+					"message": {
+	          			"chat": {
+	            			"chatId": "1234567890",
+	            			"type": "private"
+	          			},
+	          			"from": {
+	            			"firstName": "bot_name",
+	            			"nick": "bot_nick",
+	            			"userId": "bot_id"
+	          			},
+						"msgId": "6720509406122810000",
+	          			"text": "Some important information!",
+						"timestamp": 1564740530
+	        		},
+	                "queryId": "SVR:123456"
+	            },
+	            "type": "callbackQuery"
 			}
 		  ]
 		}
@@ -295,6 +313,100 @@ func (h *MockHandler) SelfGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *MockHandler) SendFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		err := r.ParseMultipartForm(10 << 20) // 10MB max
+		if err != nil && err != io.EOF {
+			h.logger.WithFields(logrus.Fields{
+				"err": err,
+			}).Error("cannot parse multipart form")
+			h.sendErrorResponse(w, "Cannot parse multipart form")
+			return
+		}
+
+		// Check if file field is present
+		if r.MultipartForm == nil || r.MultipartForm.File["file"] == nil || len(r.MultipartForm.File["file"]) == 0 {
+			h.sendErrorResponse(w, "Missing required parameter 'file'")
+			return
+		}
+
+		// Check if file is empty
+		fileHeader := r.MultipartForm.File["file"][0]
+		if fileHeader.Size == 0 {
+			h.sendErrorResponse(w, "File cannot be empty")
+			return
+		}
+	} else if r.Method == http.MethodGet {
+		// GET request must have fileId parameter
+		if r.FormValue("fileId") == "" {
+			h.sendErrorResponse(w, "Missing required parameter 'fileId'")
+			return
+		}
+	} else {
+		h.sendErrorResponse(w, "Invalid HTTP method")
+		return
+	}
+
+	response := `{
+		"ok": true,
+		"msgId": "test123",
+		"timestamp": 123456
+	}`
+	_, err := w.Write([]byte(response))
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"err": err,
+		}).Error("cannot write response")
+	}
+}
+
+func (h *MockHandler) SendVoice(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		err := r.ParseMultipartForm(10 << 20) // 10MB max
+		if err != nil && err != io.EOF {
+			h.logger.WithFields(logrus.Fields{
+				"err": err,
+			}).Error("cannot parse multipart form")
+			h.sendErrorResponse(w, "Cannot parse multipart form")
+			return
+		}
+
+		// Check if file field is present
+		if r.MultipartForm == nil || r.MultipartForm.File["file"] == nil || len(r.MultipartForm.File["file"]) == 0 {
+			h.sendErrorResponse(w, "Missing required parameter 'file'")
+			return
+		}
+
+		// Check if file is empty
+		fileHeader := r.MultipartForm.File["file"][0]
+		if fileHeader.Size == 0 {
+			h.sendErrorResponse(w, "File cannot be empty")
+			return
+		}
+	} else if r.Method == http.MethodGet {
+		// GET request must have fileId parameter
+		if r.FormValue("fileId") == "" {
+			h.sendErrorResponse(w, "Missing required parameter 'fileId'")
+			return
+		}
+	} else {
+		h.sendErrorResponse(w, "Invalid HTTP method")
+		return
+	}
+
+	response := `{
+		"ok": true,
+		"msgId": "voice123",
+		"timestamp": 123456
+	}`
+	_, err := w.Write([]byte(response))
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"err": err,
+		}).Error("cannot write response")
+	}
+}
+
 func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.FormValue("token") == "":
@@ -302,6 +414,12 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case r.URL.Path == "/messages/sendText":
 		h.SendMessage(w)
+		return
+	case r.URL.Path == "/messages/sendFile":
+		h.SendFile(w, r)
+		return
+	case r.URL.Path == "/messages/sendVoice":
+		h.SendVoice(w, r)
 		return
 	case r.URL.Path == "/events/get":
 		h.GetEvents(w)
@@ -321,5 +439,18 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}).Error("cannot encode response")
 		}
 	}
+}
 
+func NewApiMockClient(t *testing.T) Client {
+	t.Helper()
+
+	testServer := httptest.NewServer(&MockHandler{logger: logrus.New()})
+	t.Cleanup(testServer.Close)
+
+	return Client{
+		baseURL: testServer.URL,
+		token:   "test_token",
+		client:  http.DefaultClient,
+		logger:  &logrus.Logger{},
+	}
 }
